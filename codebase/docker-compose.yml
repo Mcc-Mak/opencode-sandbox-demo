@@ -1,0 +1,23 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: opencode-workflow-demo:${IMAGE_TAG:-latest}
+    ports:
+      - "${NIC:-127.0.0.1}:${PORT:-8080}:8080"
+    restart: unless-stopped
+
+  # OpenCode sandbox — web UI daemon. Starts with `docker compose up`.
+  # Requires HKOAI_API_KEY in codebase/.env (local-only, never CI).
+  opencode:
+    build:
+      context: .
+      dockerfile: Dockerfile.opencode
+    image: opencode-sandbox:${IMAGE_TAG:-latest}
+    command: ["web", "--hostname", "0.0.0.0"]
+    environment:
+      - HKOAI_API_KEY=${HKOAI_API_KEY:-}
+    ports:
+      - "${NIC:-127.0.0.1}:${OPENCODE_PORT:-61211}:4096"
+    restart: unless-stopped
