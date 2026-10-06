@@ -76,7 +76,7 @@ wf --> cl : version bump
 ```
 
 - **App service** — containerised application defined by the multi-stage `Dockerfile` (a `node` stage builds the Vite app, an `nginx` stage serves `dist/` as the non-root `nginx` user via a custom `nginx.conf` on port 8080) + `docker-compose.yml`; ports and NIC come from `.env`.
-- **OpenCode sandbox** — web UI daemon defined by `Dockerfile.opencode` (`node:24-alpine` + `opencode-ai@1.18.34` + `git`), running `opencode web --hostname 0.0.0.0` (opencode's default internal port) in `docker-compose.yml`. `HKOAI_API_KEY` is passed from `.env` (local-only). Publishes the web interface on host port `OPENCODE_PORT` (default `61211`). Starts alongside the app service with `docker compose up`.
+- **OpenCode sandbox** — web UI daemon defined by `Dockerfile.opencode` (`node:24-alpine` + `opencode-ai@1.18.34` + `git`), running `opencode web --hostname 0.0.0.0` (opencode's default internal port) in `docker-compose.yml`. `opencode.json` (repo root) is bind-mounted read-only into `/sandbox` so the container reads its config without baking it into the image. `HKOAI_API_KEY` is passed from `.env` (local-only). Publishes the web interface on host port `OPENCODE_PORT` (default `61211`). Starts alongside the app service with `docker compose up`.
 - **App site** — React + Vite SPA in `codebase/site/`, deployed to GitHub Pages. The container and Pages ship an identical `dist/` artifact.
 - **Documentation** — markdown-only `docbase/`, published to the GitHub Wiki by the `wiki` job.
 - **Pipeline** — six-job workflow (`release → fast_checks → promote → security_checks → pages + wiki`) that progressively promotes code from `dev-001` to GitHub Pages (app) and the GitHub Wiki (docs).
