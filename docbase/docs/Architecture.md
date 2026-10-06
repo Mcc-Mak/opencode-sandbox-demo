@@ -139,7 +139,7 @@ note right of sandbox
 end note
 
 note right of pages
-  base: /opencode-workflow-demo/
+  base: /opencode-sandbox-demo/
   Triggered on push to main
 end note
 

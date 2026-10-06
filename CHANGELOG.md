@@ -2,20 +2,22 @@
 
 All notable changes to this project are documented here. Versions follow semver.
 
-## 0.6.7 (2026-10-06)
+## 0.7.2 (2026-10-06)
 
-### Other
-- fix(docs): correct Mermaid edge label syntax in Architecture.md (0.7.2)
+### Fixed
+- correct Mermaid edge label syntax in Architecture.md (0.7.2)
 
-## 0.6.6 (2026-10-06)
+## 0.7.1 (2026-10-06)
 
 ### Other
 - docs: remove template boilerplate, keep 7 project-relevant docs (0.7.1)
 
-## 0.6.5 (2026-10-06)
+## 0.7.0 (2026-10-06)
+
+### Added
+- add OpenCode sandbox connecting to HKO AI model (0.7.0)
 
 ### Other
-- feat(sandbox): add OpenCode sandbox connecting to HKO AI model (0.7.0)
 - Initial commit
 
 ## 0.6.4 (2026-10-05)
