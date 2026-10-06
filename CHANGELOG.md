@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Versions follow semver.
 
+## 0.7.5 (2026-10-06)
+
+### Fixed
+- run security_checks on push to main for SonarCloud baseline (0.7.5)
+
 ## 0.7.4 (2026-10-06)
 
 ### Fixed
