@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Versions follow semver.
 
+## 0.7.4 (2026-10-06)
+
+### Fixed
+- narrow sonar sources and exclude coverage for demo app (0.7.3)
+
 ## 0.7.3 (2026-10-06)
 
 ### Fixed
