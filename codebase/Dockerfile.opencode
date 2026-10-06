@@ -1,0 +1,14 @@
+# syntax=docker/dockerfile:1
+
+# OpenCode sandbox image — runs the OpenCode agent connected to the HKO AI
+# model (zai-org/GLM-5.2-FP8 via LiteLLM). The project repo is mounted at
+# /sandbox at runtime (see docker-compose.yml → opencode service), so this
+# image only needs opencode itself + git (for the workflow's git steps).
+FROM node:24-alpine
+WORKDIR /sandbox
+
+# hadolint ignore=DL3018
+RUN apk add --no-cache git \
+    && npm install -g opencode-ai@1.18.34
+
+ENTRYPOINT ["opencode"]
