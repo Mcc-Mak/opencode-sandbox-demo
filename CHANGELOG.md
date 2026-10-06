@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. Versions follow semver.
 
+## 0.7.3 (2026-10-06)
+
+### Fixed
+- store regex in variable to avoid bash parser error (0.7.3)
+- correct repo name references and release job regex (0.7.3)
+
 ## 0.7.2 (2026-10-06)
 
 ### Fixed
