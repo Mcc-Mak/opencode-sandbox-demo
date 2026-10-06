@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Versions follow semver.
 
+## 0.8.2 (2026-10-06)
+
+### Fixed
+- redirect error messages to stderr in configure-secrets.sh (S7677)
+
 ## 0.8.1 (2026-10-06)
 
 ### Fixed
