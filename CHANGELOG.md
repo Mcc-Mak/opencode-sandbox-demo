@@ -115,4 +115,3 @@ All notable changes to this project are documented here. Versions follow semver.
 
 ### Other
 - Initial commit
-

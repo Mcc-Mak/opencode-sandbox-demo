@@ -17,7 +17,7 @@ flowchart TB
       APP["site/ (React + Vite app)"]
     end
     subgraph docbase["docbase/ (documentation, markdown only)"]
-      DOCS["docs/*.md (15 docs)"]
+      DOCS["docs/*.md (7 docs)"]
       TOC["TOCTREE.md"]
     end
     subgraph cicd[".github/workflows/"]
@@ -68,8 +68,8 @@ package ".github/workflows/" {
 env --> dc : ports + NIC + HKOAI_API_KEY
 dc --> df : build (app)
 dc --> dfoc : build (opencode)
-  df --> app : npm build → nginx serve
-  dfoc --> ocjson : uses
+df --> app : npm build → nginx serve
+dfoc --> ocjson : uses
 toc --> docs : index
 wf --> cl : version bump
 @enduml

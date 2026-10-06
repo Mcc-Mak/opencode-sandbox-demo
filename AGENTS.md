@@ -19,8 +19,7 @@ Code and docs are strictly separated. Do not mix them.
   - `site/` — React + Vite application, built and deployed to GitHub Pages on push to `main` (the same `dist/` is produced by the multi-stage `Dockerfile`, so container and Pages deploy an identical artifact)
 - `docbase/` — all documentation (markdown only; published to the GitHub Wiki on push to `main`)
   - `TOCTREE.md` — index linking every doc below (also drives the wiki `TOCTREE` page and `_Sidebar.md`)
-  - `docs/ProjectCharter.md`, `UserStories.md`, `PRD.md`, `SRS.md`, `PDR.md`, `ADR.md`,
-    `Architecture.md`, `API.md`, `Schema.md`, `ERD.md`, `QuickStart.md`,
+  - `docs/SRS.md`, `Architecture.md`, `QuickStart.md`,
     `Configurations.md`, `CICD-Pipeline.md`, `RTM.md`, `CRM.md`
   - **CRM** = Cross-Reference Matrix (maps requirements → docs → tests). Keep it updated when requirements change.
 - `opencode.json` (repo root) — OpenCode sandbox config: defines the `hko` provider (OpenAI-compatible → LiteLLM), pins `zai-org/GLM-5.2-FP8`, loads `AGENTS.md` as instructions, and grants `*` permissions. The API key is injected from `HKOAI_API_KEY`.

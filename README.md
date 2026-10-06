@@ -1,15 +1,15 @@
-# opencode-workflow-demo
+# opencode-sandbox-demo
 
 > **Deployments:**
 >
 > | Target | URL |
 > | --- | --- |
 > | App (Vite) → GitHub Pages | <https://mcc-mak.github.io/opencode-workflow-demo/> |
-> | Docs (markdown) → GitHub Wiki | <https://github.com/mcc-mak/opencode-workflow-demo/wiki> |
+> | Docs (markdown) → GitHub Wiki | <https://github.com/Mcc-Mak/opencode-workflow-demo/wiki> |
 >
 > **Full documentation index:** [`docbase/TOCTREE.md`](docbase/TOCTREE.md)
 
-A standard template for OpenCode projects: a coding workflow, a progressive GitHub Actions CI/CD pipeline, and strict semantic versioning. The contents of `codebase/` are project-specific; everything else is reusable infrastructure.
+A Docker project that builds an **OpenCode sandbox** connecting to the HKO AI model — `zai-org/GLM-5.2-FP8` served by the HKO LiteLLM gateway. The sandbox is configured by `opencode.json` (repo root) and runs as a Docker Compose service alongside a sample React + Vite app. The repo also retains reusable infrastructure: a seven-step coding workflow, a progressive GitHub Actions CI/CD pipeline, and strict semantic versioning.
 
 ## CI/CD pipeline (Mermaid)
 
@@ -42,14 +42,16 @@ flowchart LR
 .
 ├── AGENTS.md              # OpenCode session guidance (read before editing)
 ├── CHANGELOG.md           # versioned changelog, managed by the pipeline
-├── codebase/              # project implementation (replace per project)
+├── opencode.json          # sandbox config: hko provider, GLM-5.2-FP8, API key from env
+├── codebase/              # project implementation
 │   ├── .env.example       # source of truth for configurable knobs
-│   ├── docker-compose.yml # reads env for ports + NIC
+│   ├── docker-compose.yml # app + opencode services
 │   ├── Dockerfile         # multi-stage: node builds Vite app → nginx serves dist/
+│   ├── Dockerfile.opencode# node:24-alpine + opencode-ai + git
 │   └── site/              # React + Vite application deployed to GitHub Pages
 ├── docbase/               # all documentation (markdown → GitHub Wiki)
 │   ├── TOCTREE.md         # index of every doc (also drives wiki Home/_Sidebar)
-│   └── docs/*.md          # charter, SRS, architecture, API, ERD, ...
+│   └── docs/*.md          # SRS, Architecture, QuickStart, Configurations, CICD-Pipeline, RTM, CRM
 └── .github/workflows/     # CI/CD pipeline
 ```
 
@@ -137,11 +139,11 @@ docker compose --env-file codebase/.env --project-directory codebase up --build
 
 Open <http://127.0.0.1:8080>.
 
-## Using this as a template
+### OpenCode sandbox
 
-1. Create a new repo from this template.
-2. Replace `codebase/` with your implementation; update `.env.example`, `Dockerfile`, `docker-compose.yml`.
-3. Fill in `docbase/docs/*.md` for your project.
-4. Set `base` in `codebase/site/vite.config.ts` to `/<your-repo>/`.
-5. Update `sonar-project.properties` (`sonar.organization`, `sonar.projectKey`, `sonar.projectName`).
-6. Configure the secrets and Pages source above.
+```bash
+# set HKOAI_API_KEY in codebase/.env first
+docker compose --env-file codebase/.env --project-directory codebase up -d
+```
+
+Open <http://127.0.0.1:61211>.
