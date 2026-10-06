@@ -32,7 +32,7 @@ flowchart TB
   DC --> DF
   DC --> DFOC
   DF --> APP
-  DFOC --> OCJSON : uses
+  DFOC -->|uses| OCJSON
   TOC --> DOCS
   WF -->|promotes| repo
 ```
