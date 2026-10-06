@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Versions follow semver.
 
+## 0.8.0 (2026-10-06)
+
+### Added
+- consolidate CI/CD to single workflow run + fix Dockerfile S6505 (0.8.0)
+
 ## 0.7.6 (2026-10-06)
 
 ### Fixed
