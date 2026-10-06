@@ -209,14 +209,15 @@ jobs:
           done
 
   # =========================================================================
-  # 3. SECURITY CHECKS — dev → main gate.
-  #    CodeQL (SAST) + SonarQube Cloud (SCA + Quality Gate). Runs only on
-  #    PRs targeting main; fails closed on findings. This is the quality
-  #    gate that promotion through dev → main must pass.
+  # 3. SECURITY CHECKS — dev → main gate + main branch analysis.
+  #    CodeQL (SAST) + SonarQube Cloud (SCA + Quality Gate). Runs on:
+  #      - PRs targeting main → gate, fails closed on findings.
+  #      - Push to main → SonarCloud branch analysis (informational, no
+  #        fail-closed) to establish the main branch baseline.
   # =========================================================================
   security_checks:
     name: Security & Quality Gate
-    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    if: (github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -287,6 +288,14 @@ jobs:
           dashboardUrl=$(sed -n 's/^dashboardUrl=\(.*\)/\1/p' "$metadata")
           organization=$(sed -n 's/^organization=\(.*\)/\1/p' "$metadata")
 
+          # On push to main, quality gate is informational (code already merged).
+          # On PR to main, quality gate fails closed (blocks the merge).
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            fail_closed=0
+          else
+            fail_closed=1
+          fi
+
           echo "Polling CE task: $ceTaskId (organization: $organization)"
 
           # Poll CE task status (with organization parameter for SonarCloud)
@@ -354,13 +363,13 @@ jobs:
             echo "::warning::Quality Gate has WARNINGS"
           elif [[ "$qgStatus" == "ERROR" ]]; then
             echo "::error::Quality Gate FAILED (status: ERROR). Review findings on the SonarCloud dashboard: ${dashboardUrl}"
-            exit 1
+            if [[ "$fail_closed" == "1" ]]; then exit 1; fi
           elif [[ "$qgStatus" == "NONE" ]]; then
             echo "::error::No Quality Gate assigned to this project. Go to SonarCloud → ${organization} → Project Settings → Quality Gates and assign one (e.g. 'Sonar way')."
-            exit 1
+            if [[ "$fail_closed" == "1" ]]; then exit 1; fi
           else
             echo "::error::Unexpected Quality Gate status: $qgStatus"
-            exit 1
+            if [[ "$fail_closed" == "1" ]]; then exit 1; fi
           fi
 
   # =========================================================================

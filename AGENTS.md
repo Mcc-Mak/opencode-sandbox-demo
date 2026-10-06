@@ -65,7 +65,7 @@ The pipeline has progressive stages, one per promotion hop:
 
 - **`dev-001` push** — `release` job bumps the version and updates `CHANGELOG.md` from conventional commits (runs before promotion).
 - **`dev-001` → `dev`**: `fast_checks` job — validate compose, build the image, lint. Gates this hop.
-- **`dev` → `main`**: `security_checks` job — **CodeQL** (SAST, mandatory hard gate) + **SonarQube Cloud** (quality gate, fail-closed when `SONAR_TOKEN` is configured; skipped with a notice when absent). This hop fails closed on findings.
+- **`dev` → `main`**: `security_checks` job — **CodeQL** (SAST, mandatory hard gate) + **SonarQube Cloud** (quality gate, fail-closed when `SONAR_TOKEN` is configured; skipped with a notice when absent). This hop fails closed on findings. The job also runs on push to `main` to establish the SonarCloud branch baseline (informational, no fail-closed).
 - **`main` → GitHub Pages**: `pages` job — build the **React + Vite** app (`codebase/site/`) and deploy to Pages.
 - **`main` → GitHub Wiki**: `wiki` job — publish `docbase/` markdown to the repository's GitHub Wiki. Runs in parallel with `pages`. Reuses `PROMOTE_TOKEN`. GitHub does not create the `.wiki.git` repo until the first page is saved through the web UI; until then the job warns and exits 0 (non-blocking — does not fail the pipeline).
 
