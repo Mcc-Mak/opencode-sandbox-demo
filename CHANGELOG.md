@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. Versions follow semver.
 
+## 0.6.5 (2026-10-06)
+
+### Other
+- feat(sandbox): add OpenCode sandbox connecting to HKO AI model (0.7.0)
+- Initial commit
+
 ## 0.6.4 (2026-10-05)
 
 ### Other
