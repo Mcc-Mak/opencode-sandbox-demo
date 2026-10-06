@@ -10,6 +10,9 @@ services:
 
   # OpenCode sandbox — web UI daemon. Starts with `docker compose up`.
   # Requires HKOAI_API_KEY in codebase/.env (local-only, never CI).
+  # opencode.json lives at the repo root (../ from codebase/); bind-mounted
+  # read-only into /sandbox so the container reads its config without baking
+  # it into the image.
   opencode:
     build:
       context: .
@@ -18,6 +21,8 @@ services:
     command: ["web", "--hostname", "0.0.0.0"]
     environment:
       - HKOAI_API_KEY=${HKOAI_API_KEY:-}
+    volumes:
+      - ../opencode.json:/sandbox/opencode.json:ro
     ports:
       - "${NIC:-127.0.0.1}:${OPENCODE_PORT:-61211}:4096"
     restart: unless-stopped

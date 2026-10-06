@@ -1,9 +1,10 @@
 # syntax=docker/dockerfile:1
 
 # OpenCode sandbox image — runs the OpenCode agent connected to the HKO AI
-# model (zai-org/GLM-5.2-FP8 via LiteLLM). The project repo is mounted at
-# /sandbox at runtime (see docker-compose.yml → opencode service), so this
-# image only needs opencode itself + git (for the workflow's git steps).
+# model (zai-org/GLM-5.2-FP8 via LiteLLM). At runtime, opencode.json is
+# bind-mounted read-only into /sandbox (see docker-compose.yml → opencode
+# service), so this image only needs opencode itself + git (for the
+# workflow's git steps).
 FROM node:24-alpine
 WORKDIR /sandbox
 

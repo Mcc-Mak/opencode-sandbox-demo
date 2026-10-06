@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Versions follow semver.
 
+## 0.7.6 (2026-10-06)
+
+### Fixed
+- bind-mount opencode.json read-only into sandbox container (0.7.6)
+
 ## 0.7.5 (2026-10-06)
 
 ### Fixed
