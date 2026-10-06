@@ -4,8 +4,8 @@
 >
 > | Target | URL |
 > | --- | --- |
-> | App (Vite) → GitHub Pages | <https://mcc-mak.github.io/opencode-workflow-demo/> |
-> | Docs (markdown) → GitHub Wiki | <https://github.com/Mcc-Mak/opencode-workflow-demo/wiki> |
+> | App (Vite) → GitHub Pages | <https://mcc-mak.github.io/opencode-sandbox-demo/> |
+> | Docs (markdown) → GitHub Wiki | <https://github.com/Mcc-Mak/opencode-sandbox-demo/wiki> |
 >
 > **Full documentation index:** [`docbase/TOCTREE.md`](docbase/TOCTREE.md)
 
@@ -122,7 +122,7 @@ What you need before filling in `.env`:
 - **`PROMOTE_TOKEN`** — GitHub PAT with `repo` + `workflow` scopes (PRs created by `GITHUB_TOKEN` don't trigger checks, so promotion needs a PAT; also reused to push `docbase/` to the GitHub Wiki).
 - **`SONAR_TOKEN`** — SonarQube Cloud token (SonarCloud → My Account → Security). Optional.
 - **`NOTIFICATION_ADDRESS`** — Email recipient for deployment notifications.
-- **`NOTIFICATION_HEADER`** — Email subject header (e.g. `GitHub - [HKO] opencode-workflow-demo`).
+- **`NOTIFICATION_HEADER`** — Email subject header (e.g. `GitHub - [HKO] opencode-sandbox-demo`).
 - **`NOTIFICATION_ACTIVE`** — `true` to enable, `false` to disable.
 - GitHub Pages source set to **GitHub Actions** (the script does this; or set it manually under Settings → Pages).
 - `dev-001` registered as a deployment branch in **Settings → Environments → github-pages** (the script does this too).

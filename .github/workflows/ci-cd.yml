@@ -85,10 +85,11 @@ jobs:
 
           # 3. Parse conventional commits → grouped entries + bump level
           feats=(); fixes=(); chores=(); others=(); breaking=0
+          cc_re='^([a-z]+)(\([^)]*\))?(\!)?:\ (.+)'
           while IFS= read -r subj; do
             [[ -z "$subj" ]] && continue
-            if [[ "$subj" =~ ^([a-z]+)(\!)?:\ (.+) ]]; then
-              type="${BASH_REMATCH[1]}"; mark="${BASH_REMATCH[2]}"; rest="${BASH_REMATCH[3]}"
+            if [[ "$subj" =~ $cc_re ]]; then
+              type="${BASH_REMATCH[1]}"; mark="${BASH_REMATCH[3]}"; rest="${BASH_REMATCH[4]}"
               if [[ -n "$mark" ]]; then breaking=1; fi
               case "$type" in
                 feat)  feats+=("- $rest");;

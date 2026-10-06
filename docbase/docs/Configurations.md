@@ -36,7 +36,7 @@ The script pushes each value into GitHub's secret store with `gh secret set`, en
 | Secret | Used by | Description |
 | --- | --- | --- |
 | `NOTIFICATION_ADDRESS` | pages | Recipient email for deployment notifications. |
-| `NOTIFICATION_HEADER` | pages | Email subject header (e.g. `GitHub - [HKO] opencode-workflow-demo`). |
+| `NOTIFICATION_HEADER` | pages | Email subject header (e.g. `GitHub - [HKO] opencode-sandbox-demo`). |
 | `NOTIFICATION_ACTIVE` | pages | `"true"` to enable notifications, `"false"` to disable. Currently `false`. |
 
 ### Secrets configuration flow (Mermaid)
@@ -98,7 +98,7 @@ docker compose up -d opencode
 
 ## Application site
 
-The React + Vite application (`codebase/site/`) is deployed to GitHub Pages at the path matching the repository name (`/opencode-workflow-demo/`). If you rename the repo, update `base` in `codebase/site/vite.config.ts`.
+The React + Vite application (`codebase/site/`) is deployed to GitHub Pages at the path matching the repository name (`/opencode-sandbox-demo/`). If you rename the repo, update `base` in `codebase/site/vite.config.ts`.
 
 The multi-stage `codebase/Dockerfile` runs the same Vite build (`npm ci --ignore-scripts && npm run build`) in a `node` stage and serves the resulting `dist/` from an `nginx` stage. The nginx stage uses a custom `codebase/nginx.conf` (listening on port 8080) and runs as the non-root `nginx` user (`USER nginx`). The container and the Pages deploy therefore ship an identical artifact.
 
