@@ -61,17 +61,17 @@ Do not skip steps 4–5. Implementation without docs + changelog is incomplete.
 
 ## CI/CD pipelines (`.github/workflows/*.yml`)
 
-The pipeline has progressive stages, one per promotion hop:
+A single workflow run on every `dev-001` push (plus `workflow_dispatch`). All jobs chain in one run — no PR-triggered gate runs, no separate main-branch runs:
 
-- **`dev-001` push** — `release` job bumps the version and updates `CHANGELOG.md` from conventional commits (runs before promotion).
-- **`dev-001` → `dev`**: `fast_checks` job — validate compose, build the image, lint. Gates this hop.
-- **`dev` → `main`**: `security_checks` job — **CodeQL** (SAST, mandatory hard gate) + **SonarQube Cloud** (quality gate, fail-closed when `SONAR_TOKEN` is configured; skipped with a notice when absent). This hop fails closed on findings. The job also runs on push to `main` to establish the SonarCloud branch baseline (informational, no fail-closed).
-- **`main` → GitHub Pages**: `pages` job — build the **React + Vite** app (`codebase/site/`) and deploy to Pages.
-- **`main` → GitHub Wiki**: `wiki` job — publish `docbase/` markdown to the repository's GitHub Wiki. Runs in parallel with `pages`. Reuses `PROMOTE_TOKEN`. GitHub does not create the `.wiki.git` repo until the first page is saved through the web UI; until then the job warns and exits 0 (non-blocking — does not fail the pipeline).
+1. **`release`** — bump version and update `CHANGELOG.md` from conventional commits.
+2. **`fast_checks`** (needs: release) — validate compose, build the image, lint. Gate.
+3. **`security_checks`** (needs: fast_checks) — **CodeQL** (SAST, mandatory hard gate) + **SonarQube Cloud** (quality gate, fail-closed when `SONAR_TOKEN` is configured; skipped with a notice when absent).
+4. **`promote`** (needs: security_checks) — direct `git push` of the dev-001 HEAD to `dev` and `main` using `GITHUB_TOKEN`. No PRs; gate checks already ran in steps 2–3. `--force-with-lease` handles stale merge commits from the previous PR-based flow.
+5. **`pages`** + **`wiki`** + **`sonar_baseline`** (needs: promote, parallel) — check out `main` (the promoted commit): build the React + Vite app and deploy to Pages; sync `docbase/` to the GitHub Wiki (uses `PROMOTE_TOKEN` for the wiki repo push); run an informational SonarCloud scan to establish the main-branch baseline.
 
-Promotion is driven by the `promote` job, which opens PRs `dev-001 → dev` and `dev → main` and merges each only after its gate check passes. It uses `PROMOTE_TOKEN` (a PAT) so the PRs trigger the gate workflow runs.
+`GITHUB_TOKEN` pushes do not trigger new workflow runs (GitHub security feature), which is exactly what we want — the entire pipeline is one run. GitHub does not create the `.wiki.git` repo until the first page is saved through the web UI; until then the `wiki` job warns and exits 0 (non-blocking).
 
-When editing workflows, preserve the stage boundaries and the CodeQL hard gate on the `dev → main` hop. SonarQube Cloud runs (and fails closed) when `SONAR_TOKEN` is configured; it is skipped when absent.
+When editing workflows, preserve the job chain (release → fast_checks → security_checks → promote → pages/wiki/sonar_baseline) and the CodeQL hard gate. SonarQube Cloud runs (and fails closed) when `SONAR_TOKEN` is configured; it is skipped when absent.
 
 ## Conventions
 

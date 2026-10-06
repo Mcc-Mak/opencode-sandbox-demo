@@ -21,7 +21,7 @@ flowchart TB
       TOC["TOCTREE.md"]
     end
     subgraph cicd[".github/workflows/"]
-      WF["ci-cd.yml (6 jobs)"]
+      WF["ci-cd.yml (7 jobs)"]
     end
     AGENTS["AGENTS.md"]
     OCJSON["opencode.json"]
@@ -79,7 +79,7 @@ wf --> cl : version bump
 - **OpenCode sandbox** — web UI daemon defined by `Dockerfile.opencode` (`node:24-alpine` + `opencode-ai@1.18.34` + `git`), running `opencode web --hostname 0.0.0.0` (opencode's default internal port) in `docker-compose.yml`. `opencode.json` (repo root) is bind-mounted read-only into `/sandbox` so the container reads its config without baking it into the image. `HKOAI_API_KEY` is passed from `.env` (local-only). Publishes the web interface on host port `OPENCODE_PORT` (default `61211`). Starts alongside the app service with `docker compose up`.
 - **App site** — React + Vite SPA in `codebase/site/`, deployed to GitHub Pages. The container and Pages ship an identical `dist/` artifact.
 - **Documentation** — markdown-only `docbase/`, published to the GitHub Wiki by the `wiki` job.
-- **Pipeline** — six-job workflow (`release → fast_checks → promote → security_checks → pages + wiki`) that progressively promotes code from `dev-001` to GitHub Pages (app) and the GitHub Wiki (docs).
+- **Pipeline** — seven-job workflow (`release → fast_checks → security_checks → promote → pages + wiki + sonar_baseline`) that chains in a single workflow run on every `dev-001` push. Gate checks (fast_checks, security_checks) run before the `promote` job pushes directly to `dev` and `main` via `GITHUB_TOKEN`; `pages`, `wiki`, and `sonar_baseline` check out `main` and run in parallel after promotion.
 
 ## CI/CD data flow (Mermaid)
 
@@ -87,14 +87,14 @@ wf --> cl : version bump
 flowchart LR
   A["dev-001 push"] --> B["release\nversion bump"]
   B --> C["fast_checks\ncompose + build + lint"]
-  C --> D["promote\nPR dev-001→dev"]
-  D -->|gate: Fast Checks| E["merge to dev"]
-  E --> F["PR dev→main"]
-  F -->|gate: Security & Quality| G["merge to main"]
-  G --> H["pages\nbuild + deploy"]
-  G --> W["wiki\nsync docbase/"]
-  H --> I["GitHub Pages (app)"]
-  W --> J["GitHub Wiki (docs)"]
+  C --> D["security_checks\nCodeQL + SonarQube gate"]
+  D --> E["promote\ndirect push dev-001→dev→main"]
+  E --> F["pages\ncheckout main, build + deploy"]
+  E --> G["wiki\ncheckout main, sync docbase/"]
+  E --> H["sonar_baseline\ncheckout main, informational scan"]
+  F --> I["GitHub Pages (app)"]
+  G --> J["GitHub Wiki (docs)"]
+  H --> K["SonarCloud dashboard"]
 ```
 
 ## Deployment
@@ -103,8 +103,8 @@ The system deploys in four ways:
 
 1. **App container** — `docker compose up --build` from `codebase/`; the multi-stage `Dockerfile` builds the Vite app and serves `dist/` from nginx, binding to the host port and NIC defined in `.env`.
 2. **OpenCode sandbox** — `docker compose up` from `codebase/`; builds `Dockerfile.opencode` and starts the OpenCode web UI (`opencode web --hostname 0.0.0.0`) connected to the HKO AI model. Published on host port `OPENCODE_PORT` (default `61211`). Local-only (`HKOAI_API_KEY` in `.env`).
-3. **Application** — GitHub Actions builds the Vite app in `codebase/site/` and deploys the static artifact to GitHub Pages on every push to `main`. Identical `dist/` to the container.
-4. **Documentation** — GitHub Actions syncs `docbase/` markdown to the GitHub Wiki on every push to `main` (parallel with Pages).
+3. **Application** — GitHub Actions builds the Vite app in `codebase/site/` and deploys the static artifact to GitHub Pages after the `promote` job pushes to `main`. Checks out `main` (the promoted commit). Identical `dist/` to the container.
+4. **Documentation** — GitHub Actions syncs `docbase/` markdown to the GitHub Wiki after the `promote` job pushes to `main` (parallel with Pages and SonarCloud baseline). Checks out `main`.
 
 ### Deployment flow (PlantUML)
 
@@ -140,7 +140,8 @@ end note
 
 note right of pages
   base: /opencode-sandbox-demo/
-  Triggered on push to main
+  Checkout main after promote
+  Runs in promote's workflow run
 end note
 
 note right of wiki

@@ -16,69 +16,67 @@ flowchart LR
     PUSH["push to dev-001"]
     RELEASE["release\nbump version + CHANGELOG"]
     FAST["fast_checks\ncompose • build • lint"]
-    PROMOTE["promote\nopen PRs + merge on gate pass"]
-  end
-  subgraph dev["dev (staging)"]
-    PR1["PR: dev-001 → dev"]
+    SEC["security_checks\nCodeQL + SonarQube"]
+    PROMOTE["promote\ndirect push dev-001→dev→main"]
   end
   subgraph main["main (release)"]
-    PR2["PR: dev → main"]
-    SEC["security_checks\nCodeQL + SonarQube"]
-  end
-  subgraph pages["GitHub Pages"]
-    DEPLOY["pages\nbuild + deploy Vite app"]
-  end
-  subgraph wiki["GitHub Wiki"]
+    PAGES["pages\nbuild + deploy Vite app"]
     WIKI["wiki\nsync docbase/ markdown"]
+    SONAR["sonar_baseline\ninformational SonarCloud scan"]
   end
 
-  PUSH --> RELEASE --> FAST --> PROMOTE
-  PROMOTE -->|create PR| PR1 -->|gate: Fast Checks| PROMOTE
-  PROMOTE -->|merge| PR2 -->|gate: Security & Quality| SEC
-  SEC -->|merge to main| DEPLOY
-  SEC -->|merge to main| WIKI
+  PUSH --> RELEASE --> FAST --> SEC --> PROMOTE
+  PROMOTE --> PAGES
+  PROMOTE --> WIKI
+  PROMOTE --> SONAR
 ```
 
-### Promotion sequence (Mermaid)
+### Job sequence (Mermaid)
 
 ```mermaid
 sequenceDiagram
   participant dev001 as dev-001
-  participant R as release job
+  participant R as release
   participant F as fast_checks
-  participant P as promote job
-  participant GH as GitHub PRs
   participant S as security_checks
-  participant PG as pages job
-  participant WK as wiki job
+  participant P as promote
+  participant PG as pages
+  participant WK as wiki
+  participant SB as sonar_baseline
 
   dev001->>R: push (conventional commit)
   R->>R: bump version, update CHANGELOG
   R->>dev001: push release commit
   R->>F: (needs release)
   F->>F: validate compose, build, lint
-  F->>P: (needs fast_checks)
-  P->>GH: create PR dev-001 → dev
-  GH-->>GH: Fast Checks gate runs
-  P->>GH: merge PR (gate passed)
-  P->>GH: create PR dev → main
-  GH-->>GH: Security & Quality Gate runs
-  P->>GH: merge PR (gate passed)
-  GH->>PG: push to main triggers pages
-  PG->>PG: build Vite app, deploy to Pages
-  GH->>WK: push to main triggers wiki
-  WK->>WK: sync docbase/ to GitHub Wiki
+  F->>S: (needs fast_checks)
+  S->>S: CodeQL SAST + SonarQube quality gate
+  S->>P: (needs security_checks)
+  P->>P: git push dev-001 HEAD → dev
+  P->>P: git push dev-001 HEAD → main
+  P->>PG: (needs promote, parallel)
+  PG->>PG: checkout main, build Vite app, deploy to Pages
+  P->>WK: (needs promote, parallel)
+  WK->>WK: checkout main, sync docbase/ to GitHub Wiki
+  P->>SB: (needs promote, parallel)
+  SB->>SB: checkout main, informational SonarCloud scan
 ```
 
 ## Stages
 
-| Hop | Workflow job | Purpose |
+A single workflow run chains all jobs — no PR-triggered gate runs, no separate main-branch runs:
+
+| Job | Needs | Purpose |
 | --- | --- | --- |
-| `dev-001` push | `release` | Bump version (`major.minor.patch`) from conventional commits and update `CHANGELOG.md`. |
-| `dev-001` → `dev` | `fast_checks` | Validate compose, build the image, lint. Gates the promotion PR. |
-| `dev` → `main` | `security_checks` | CodeQL (SAST) + SonarQube Cloud (SCA + quality gate). On PR: fails closed on findings (Quality Gate exits 1 on ERROR when `SONAR_TOKEN` is configured). On push to `main`: runs SonarCloud branch analysis to establish the baseline (informational, no fail-closed). Skipped with a notice when `SONAR_TOKEN` is absent. Third-party actions are pinned to full commit SHAs. |
-| `main` → Pages | `pages` | Build the React + Vite application (`codebase/site/`) and deploy to GitHub Pages. |
-| `main` → Wiki | `wiki` | Sync `docbase/` markdown to the GitHub Wiki. Runs in parallel with `pages`. Non-blocking: warns and skips if the wiki is not yet initialized (needs one-time UI page creation). |
+| `release` | — | Bump version (`major.minor.patch`) from conventional commits and update `CHANGELOG.md`. |
+| `fast_checks` | `release` | Validate compose, build the image, lint. Gate. |
+| `security_checks` | `fast_checks` | CodeQL (SAST, mandatory hard gate) + SonarQube Cloud (quality gate, fail-closed when `SONAR_TOKEN` is configured; skipped with a notice when absent). Always fails closed on ERROR/NONE — this is a pre-promotion gate. |
+| `promote` | `security_checks` | Direct `git push` of the dev-001 HEAD to `dev` and `main` using `GITHUB_TOKEN`. No PRs; gate checks already ran. `--force-with-lease` handles stale merge commits from the previous PR-based flow. |
+| `pages` | `promote` | Checkout `main` (promoted commit), build the React + Vite application (`codebase/site/`) and deploy to GitHub Pages. |
+| `wiki` | `promote` | Checkout `main`, sync `docbase/` markdown to the GitHub Wiki. Uses `PROMOTE_TOKEN` for the wiki repo push. Non-blocking: warns and skips if the wiki is not yet initialized (needs one-time UI page creation). |
+| `sonar_baseline` | `promote` | Checkout `main`, run an informational SonarCloud scan with `GITHUB_REF` overridden to `refs/heads/main` to establish the main-branch baseline. No quality-gate check, no fail-closed. |
+
+`GITHUB_TOKEN` pushes do not trigger new workflow runs (GitHub security feature), which is exactly what we want — the entire pipeline is one run. Previously the PR-based promotion flow triggered 4 separate workflow runs per dev-001 push; the consolidated pipeline runs once.
 
 ## Versioning
 
@@ -110,12 +108,9 @@ flowchart TD
 
 | Secret | Used by | Description |
 | --- | --- | --- |
-| `GIT_PUSH_TOKEN` | release | PAT for pushing release commits. Scopes: `repo`, `workflow`. |
-| `PROMOTE_TOKEN` | promote, wiki | PAT that creates/merges promotion PRs (GITHUB_TOKEN PRs don't trigger checks) and pushes docbase/ to the GitHub Wiki. Scopes: `repo`, `workflow`. |
-| `SONAR_TOKEN` | security_checks | SonarQube Cloud analysis token. Optional — when absent, runs CodeQL-only SAST. |
-| `NOTIFICATION_ADDRESS` | pages | Recipient email for deployment notifications. |
-| `NOTIFICATION_HEADER` | pages | Email subject header for deployment notifications. |
-| `NOTIFICATION_ACTIVE` | pages | `"true"` to enable notifications, `"false"` to disable. |
+| `GITHUB_TOKEN` | release, promote | Built-in token. Release pushes the version commit to dev-001; promote pushes the dev-001 HEAD to dev and main. GITHUB_TOKEN pushes do not trigger new workflow runs (by design). |
+| `PROMOTE_TOKEN` | wiki | PAT for pushing docbase/ to the GitHub Wiki (separate `.wiki.git` repo). Scopes: `repo`, `workflow`. |
+| `SONAR_TOKEN` | security_checks, sonar_baseline | SonarQube Cloud analysis token. Optional — when absent, security_checks runs CodeQL-only SAST and sonar_baseline is skipped. |
 
 ## Repository settings
 
@@ -123,7 +118,6 @@ flowchart TD
 - Add `dev-001` and `main` as deployment branches in **Settings → Environments → github-pages**.
 - Enable the GitHub Wiki feature: **Settings → General → Features → Wikis** (the `configure-secrets.sh` script does this).
 - Initialize the GitHub Wiki (one-time): open **{repo}/wiki** in the browser and create the first page. GitHub does not create the `.wiki.git` repo until this is done. The `wiki` job warns and skips (non-blocking) until then.
-- Protect `dev` and `main`; require the matching status checks before merge.
 
 ### Deployment topology (PlantUML)
 
@@ -140,25 +134,27 @@ cloud "GitHub" as GH {
   rectangle "GitHub Wiki\n(docbase markdown)" as wiki
 }
 
-rectangle "Runner" as runner {
-  rectangle "release job" as rls
-  rectangle "fast_checks job" as fc
-  rectangle "promote job" as prom
-  rectangle "security_checks job" as sec
-  rectangle "pages job" as pg
-  rectangle "wiki job" as wk
+rectangle "Single workflow run" as runner {
+  rectangle "release" as rls
+  rectangle "fast_checks" as fc
+  rectangle "security_checks" as sec
+  rectangle "promote\n(direct git push)" as prom
+  rectangle "pages" as pg
+  rectangle "wiki" as wk
+  rectangle "sonar_baseline" as sb
 }
 
 dev001 --> rls : push
 rls --> dev001 : release commit
 rls --> fc : needs release
-fc --> prom : needs fast_checks
-prom --> dev : merge PR (gate: Fast Checks)
-dev --> sec : PR trigger
-sec --> main : merge PR (gate: Security & Quality)
-main --> pg : push trigger
-pg --> pages : deploy
-main --> wk : push trigger
-wk --> wiki : sync
+fc --> sec : needs fast_checks
+sec --> prom : needs security_checks
+prom --> dev : git push (GITHUB_TOKEN)
+prom --> main : git push (GITHUB_TOKEN)
+prom --> pg : needs promote (parallel)
+prom --> wk : needs promote (parallel)
+prom --> sb : needs promote (parallel)
+pg --> pages : checkout main, deploy
+wk --> wiki : checkout main, sync
 @enduml
 ```

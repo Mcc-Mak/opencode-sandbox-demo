@@ -4,19 +4,13 @@ on:
   push:
     branches:
       - dev-001
-      - main
     paths-ignore:
       - 'CHANGELOG.md'
-  pull_request:
-    types: [opened, synchronize, reopened]
-    branches:
-      - dev
-      - main
   workflow_dispatch:
 
 concurrency:
   group: ci-cd-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 jobs:
   # =========================================================================
@@ -160,9 +154,9 @@ jobs:
           echo "Released $next"
 
   # =========================================================================
-  # 2. FAST CHECKS — dev-001 → dev gate.
-  #    Validate compose, build the image, lint the Dockerfile. Runs on a
-  #    dev-001 push (after release) and on any PR targeting dev.
+  # 2. FAST CHECKS — dev-001 gate (after release).
+  #    Validate compose, build the image, lint the Dockerfile. Runs only on
+  #    a dev-001 push (after the release job completes).
   # =========================================================================
   fast_checks:
     name: Fast Checks
@@ -170,10 +164,8 @@ jobs:
     if: |
       !cancelled() &&
       needs.release.result != 'failure' &&
-      (
-        (github.ref == 'refs/heads/dev-001' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')) ||
-        (github.event_name == 'pull_request' && github.base_ref == 'dev')
-      )
+      github.ref == 'refs/heads/dev-001' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -209,15 +201,21 @@ jobs:
           done
 
   # =========================================================================
-  # 3. SECURITY CHECKS — dev → main gate + main branch analysis.
-  #    CodeQL (SAST) + SonarQube Cloud (SCA + Quality Gate). Runs on:
-  #      - PRs targeting main → gate, fails closed on findings.
-  #      - Push to main → SonarCloud branch analysis (informational, no
-  #        fail-closed) to establish the main branch baseline.
+  # 3. SECURITY CHECKS — gate before promotion (dev-001 push).
+  #    CodeQL (SAST, mandatory) + SonarQube Cloud (SCA + Quality Gate).
+  #    Runs after fast_checks passes on a dev-001 push. Sonar fails closed
+  #    (blocks promotion) when SONAR_TOKEN is configured; skipped (CodeQL
+  #    only) when absent. The main-branch SonarCloud baseline is established
+  #    separately by the sonar_baseline job after promotion.
   # =========================================================================
   security_checks:
     name: Security & Quality Gate
-    if: (github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    needs: fast_checks
+    if: |
+      !cancelled() &&
+      needs.fast_checks.result == 'success' &&
+      github.ref == 'refs/heads/dev-001' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -288,13 +286,10 @@ jobs:
           dashboardUrl=$(sed -n 's/^dashboardUrl=\(.*\)/\1/p' "$metadata")
           organization=$(sed -n 's/^organization=\(.*\)/\1/p' "$metadata")
 
-          # On push to main, quality gate is informational (code already merged).
-          # On PR to main, quality gate fails closed (blocks the merge).
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            fail_closed=0
-          else
-            fail_closed=1
-          fi
+          # This job is a pre-promotion gate — always fail closed on
+          # ERROR or NONE status. The main-branch baseline (informational)
+          # is handled by the separate sonar_baseline job after promotion.
+          fail_closed=1
 
           echo "Polling CE task: $ceTaskId (organization: $organization)"
 
@@ -373,33 +368,33 @@ jobs:
           fi
 
   # =========================================================================
-  # 4. AUTO-PROMOTE — Create & merge PRs dev-001→dev→main.
-  #    Runs after fast_checks passes on a dev-001 push. Each promotion
-  #    creates a PR, waits for the gate check appropriate to that hop to
-  #    pass, then merges.
+  # 4. PROMOTE — Direct push dev-001 → dev → main.
+  #    Runs after security_checks passes on a dev-001 push. Pushes the
+  #    dev-001 HEAD commit directly to dev and main using GITHUB_TOKEN.
+  #    No PRs are created — the gate checks (fast_checks, security_checks)
+  #    have already run in this same workflow, so there is no need for
+  #    separate PR-triggered gate runs. This consolidates what was
+  #    previously 4 workflow runs into 1.
   #
-  #    dev-001 → dev waits for "Fast Checks".
-  #    dev     → main waits for "Security & Quality Gate".
+  #    GITHUB_TOKEN pushes do not trigger new workflow runs (GitHub security
+  #    feature), which is exactly what we want: pages, wiki, and
+  #    sonar_baseline run as downstream jobs in THIS run, not new runs.
   #
-  #    Uses PROMOTE_TOKEN (a PAT) instead of GITHUB_TOKEN because PRs created
-  #    by GITHUB_TOKEN do not trigger pull_request workflow runs (GitHub
-  #    security feature). Without a PAT, the gate check never registers on
-  #    the PR, and the gate is silently bypassed.
+  #    --force-with-lease handles the case where dev/main contain stale
+  #    merge commits from the previous PR-based promotion flow; dev-001
+  #    is the canonical source.
   # =========================================================================
   promote:
     name: Auto-Promote (dev-001 → dev → main)
-    needs: fast_checks
+    needs: security_checks
     if: |
       !cancelled() &&
-      needs.fast_checks.result == 'success' &&
+      needs.security_checks.result == 'success' &&
       github.ref == 'refs/heads/dev-001' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     permissions:
       contents: write
-      pull-requests: write
-      actions: write
 
     steps:
       - name: Checkout Repository
@@ -407,110 +402,51 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Promote dev-001 → dev → main
+      - name: Promote dev-001 → dev → main (direct push)
         env:
-          GH_TOKEN: ${{ secrets.PROMOTE_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          echo "Promoting commit $sha"
 
-          # Fail fast with a clear message if the PAT was not configured.
-          # Without it, gh falls back to an empty token and fails opaquely.
-          if [ -z "${GH_TOKEN:-}" ]; then
-            echo "::error::PROMOTE_TOKEN secret is not set. Create a GitHub Personal Access Token with 'repo' and 'workflow' scopes, then add it as the PROMOTE_TOKEN repository secret. GITHUB_TOKEN cannot be used because PRs it creates do not trigger pull_request workflow runs, so the gate checks would never register."
-            exit 1
+          git fetch origin dev main
+
+          # dev-001 → dev
+          dev_sha="$(git rev-parse origin/dev)"
+          if [ "$dev_sha" = "$sha" ]; then
+            echo "dev already at $sha — skipping"
+          else
+            echo "Pushing $sha → dev (was $dev_sha)"
+            git push --force-with-lease=dev:"$dev_sha" origin "$sha:refs/heads/dev"
           fi
 
-          promote() {
-            local base="$1" head="$2" title="$3" gate="$4"
-
-            git fetch origin "$base" "$head"
-
-            local ahead
-            ahead=$(git rev-list --count "origin/${base}..origin/${head}" 2>/dev/null || echo 0)
-            if [ "$ahead" -eq 0 ]; then
-              echo "${head} has no commits ahead of ${base} — skipping"
-              return 0
-            fi
-            echo "${head} is ${ahead} commits ahead of ${base}"
-
-            # Close any existing open PRs for this head→base pair.
-            # Stale PRs accumulate action_required check suites (triggered
-            # by GITHUB_TOKEN release-commit pushes that GitHub refuses to
-            # execute).  A fresh PR's opened event is fired by the PAT
-            # (PROMOTE_TOKEN), so its workflow run executes normally.
-            existing_prs=$(gh pr list --base "$base" --head "$head" --state open \
-              --json number --jq '.[].number' 2>/dev/null || true)
-            for pr in $existing_prs; do
-              echo "Closing stale PR #${pr} (${head} → ${base})..."
-              gh pr close "$pr" --delete-branch=false || true
-            done
-
-            gh pr create \
-              --base "$base" \
-              --head "$head" \
-              --title "$title" \
-              --body "Automated promotion from ${head} to ${base}."
-            local pr_number
-            pr_number=$(gh pr list --base "$base" --head "$head" --state open \
-              --json number --jq '.[0].number')
-            echo "Created PR #${pr_number} (${head} → ${base})"
-
-            echo "Waiting for '${gate}' check to register on PR #${pr_number}..."
-            local gate_registered=false
-            for i in $(seq 1 60); do
-              if gh pr checks "$pr_number" --json name --jq '.[].name' 2>/dev/null \
-                   | grep -q "${gate}"; then
-                echo "  '${gate}' registered"
-                gate_registered=true
-                break
-              fi
-              echo "  Attempt ${i}/60: not yet, waiting 5s..."
-              sleep 5
-            done
-
-            if [ "$gate_registered" != "true" ]; then
-              echo "::error::'${gate}' check never registered on PR #${pr_number} — aborting merge"
-              exit 1
-            fi
-
-            echo "Waiting for checks on PR #${pr_number} to settle..."
-            # --watch blocks until all checks reach a terminal state. We
-            # ignore its exit code because third-party App checks (e.g.
-            # SonarCloud's own "SonarCloud Code Analysis", GitGuardian) may
-            # fail independently — only our named gate job decides whether
-            # this hop may merge.
-            gh pr checks "$pr_number" --watch || true
-
-            state=$(gh pr checks "$pr_number" --json name,state \
-              --jq ".[] | select(.name==\"${gate}\") | .state" 2>/dev/null \
-              | tr '[:upper:]' '[:lower:]' || echo "")
-            echo "  '${gate}' final state: ${state:-unknown}"
-            if [ "$state" != "pass" ] && [ "$state" != "success" ]; then
-              echo "::error::'${gate}' check did not pass (state: ${state:-unknown}) on PR #${pr_number} (${head} → ${base})"
-              exit 1
-            fi
-
-            gh pr merge "$pr_number" --merge --delete-branch=false
-            echo "Merged PR #${pr_number} (${head} → ${base})"
-
-            git fetch origin "$base"
-          }
-
-          promote "dev"  "dev-001" "chore: auto-promote dev-001 → dev"  "Fast Checks"
-          promote "main" "dev"     "chore: auto-promote dev → main"     "Security & Quality Gate"
+          # dev → main
+          main_sha="$(git rev-parse origin/main)"
+          if [ "$main_sha" = "$sha" ]; then
+            echo "main already at $sha — skipping"
+          else
+            echo "Pushing $sha → main (was $main_sha)"
+            git push --force-with-lease=main:"$main_sha" origin "$sha:refs/heads/main"
+          fi
 
   # =========================================================================
-  # 5. PAGES — main → GitHub Pages.
-  #    Build the React + Vite application from codebase/site/ and deploy it
-  #    to GitHub Pages. Triggers on push to main (i.e. after the dev → main
-  #    promotion merges). The same Vite build is produced by the multi-stage
-  #    Dockerfile, so the container and Pages deploy an identical artifact.
+  # 5. PAGES — Deploy React + Vite app to GitHub Pages.
+  #    Builds the app from codebase/site/ and deploys it. Runs after the
+  #    promote job pushes dev-001 to main. Checks out main (the promoted
+  #    commit) so the deployed artifact matches what was promoted. The same
+  #    Vite build is produced by the multi-stage Dockerfile, so the
+  #    container and Pages deploy an identical artifact.
   # =========================================================================
   pages:
     name: Deploy App to GitHub Pages
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: [promote]
+    if: |
+      !cancelled() &&
+      needs.promote.result == 'success' &&
+      github.ref == 'refs/heads/dev-001' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    needs: []
     permissions:
       contents: read
       pages: write
@@ -520,8 +456,10 @@ jobs:
       cancel-in-progress: false
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout Repository (main)
         uses: actions/checkout@v5
+        with:
+          ref: main
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
@@ -550,32 +488,40 @@ jobs:
         uses: actions/deploy-pages@v5
 
   # =========================================================================
-  # 6. WIKI — main → GitHub Wiki.
-  #    Publish docbase/ markdown to the repository's GitHub Wiki. Runs in
-  #    parallel with the pages job on push to main. docbase/ is the single
-  #    source of truth; the wiki is a generated mirror (force-with-lease
-  #    push keeps it in sync).
+  # 6. WIKI — Sync docbase/ to GitHub Wiki.
+  #    Publishes docbase/ markdown to the repository's GitHub Wiki. Runs in
+  #    parallel with the pages and sonar_baseline jobs after promote pushes
+  #    to main. Checks out main (the promoted commit). docbase/ is the
+  #    single source of truth; the wiki is a generated mirror (force-with-
+  #    lease push keeps it in sync).
   #
   #    The wiki is a separate git repo at {repo}.wiki.git. GitHub does not
   #    create this repo until the first page is saved through the web UI
   #    (there is no API to bootstrap it). Until then the job prints a
   #    notice and exits 0 so it does not block the rest of the pipeline;
-  #    once initialized, subsequent runs sync normally. Reuses PROMOTE_TOKEN.
+  #    once initialized, subsequent runs sync normally. Uses PROMOTE_TOKEN
+  #    (a PAT with repo scope) for the wiki repo push.
   # =========================================================================
   wiki:
     name: Sync Docs to GitHub Wiki
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: [promote]
+    if: |
+      !cancelled() &&
+      needs.promote.result == 'success' &&
+      github.ref == 'refs/heads/dev-001' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    needs: []
     permissions:
       contents: read
     concurrency:
-      group: wiki-${{ github.ref }}
+      group: wiki
       cancel-in-progress: false
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout Repository (main)
         uses: actions/checkout@v5
+        with:
+          ref: main
 
       - name: Publish docbase/ to GitHub Wiki
         env:
@@ -643,3 +589,52 @@ jobs:
               commit -m "docs: sync wiki from docbase@${short_sha}"
           git -C "$wiki_dir" push --force-with-lease origin HEAD
           echo "Wiki synced."
+
+  # =========================================================================
+  # 7. SONAR BASELINE — Establish SonarCloud main-branch baseline.
+  #    Runs after promote pushes to main. Checks out main and runs a
+  #    SonarCloud analysis with GITHUB_REF overridden to refs/heads/main so
+  #    SonarCloud attributes the analysis to the main branch. This is
+  #    informational only — no quality-gate check, no fail-closed. It
+  #    ensures the SonarCloud dashboard has a current main-branch baseline
+  #    for PR decoration and new-code calculations.
+  # =========================================================================
+  sonar_baseline:
+    name: SonarCloud Main Baseline
+    needs: [promote]
+    if: |
+      !cancelled() &&
+      needs.promote.result == 'success' &&
+      github.ref == 'refs/heads/dev-001' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout Repository (main)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Check Sonar configuration
+        id: check_sonar
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SONAR_TOKEN:-}" ]; then
+            echo "::notice::SONAR_TOKEN not set — skipping SonarCloud baseline analysis."
+            echo "has_sonar=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_sonar=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: SonarQube Cloud Scan (main branch baseline)
+        if: steps.check_sonar.outputs.has_sonar == 'true'
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9  # v8
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+          GITHUB_REF: refs/heads/main
