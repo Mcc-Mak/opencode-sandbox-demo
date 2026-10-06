@@ -35,14 +35,11 @@ fi
 # shellcheck disable=SC1090
 set -a; source "$env_file"; set +a
 
-# Expand ${PROJECT_NAME} in NOTIFICATION_HEADER
-NOTIFICATION_HEADER="${NOTIFICATION_HEADER//\$\{PROJECT_NAME\}/${PROJECT_NAME:-}}"
-
 # ── Secrets ─────────────────────────────────────────────────────────────────
 echo "Storing secrets in GitHub (values are redacted by gh)..."
 
 # Token secrets — only set when non-empty (already-set secrets are preserved).
-for var in GIT_PUSH_TOKEN PROMOTE_TOKEN SONAR_TOKEN; do
+for var in PROMOTE_TOKEN SONAR_TOKEN; do
   value="${!var:-}"
   if [[ -n "$value" ]]; then
     printf '%s' "$value" | gh secret set "$var"
@@ -51,14 +48,6 @@ for var in GIT_PUSH_TOKEN PROMOTE_TOKEN SONAR_TOKEN; do
     echo "  skip $var (empty — leaving existing secret unchanged)"
   fi
 done
-
-# Notification secrets — always set (even "false" is a meaningful value).
-printf '%s' "${NOTIFICATION_ADDRESS:-}" | gh secret set NOTIFICATION_ADDRESS
-printf '%s' "${NOTIFICATION_HEADER:-}"  | gh secret set NOTIFICATION_HEADER
-printf '%s' "${NOTIFICATION_ACTIVE:-false}" | gh secret set NOTIFICATION_ACTIVE
-echo "  set NOTIFICATION_ADDRESS"
-echo "  set NOTIFICATION_HEADER"
-echo "  set NOTIFICATION_ACTIVE"
 
 # ── GitHub Pages ────────────────────────────────────────────────────────────
 echo ""

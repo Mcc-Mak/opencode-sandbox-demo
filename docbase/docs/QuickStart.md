@@ -66,24 +66,29 @@ actor Developer as dev
 participant "git push" as git
 participant "release" as rls
 participant "fast_checks" as fc
-participant "promote" as prom
 participant "security_checks" as sec
+participant "promote" as prom
 participant "pages" as pg
 participant "wiki" as wk
+participant "sonar_baseline" as sb
 
 dev -> git : commit to dev-001
 git -> rls : push
 rls -> rls : bump version + CHANGELOG
-rls -> fc : trigger
+rls -> fc : (needs release)
 fc -> fc : compose + build + lint
-fc -> prom : pass
-prom -> prom : PR dev-001 → dev (gate: Fast Checks)
-prom -> prom : PR dev → main (gate: Security & Quality)
-prom -> pg : merge to main
-prom -> wk : merge to main
-pg -> pg : build Vite app
+fc -> sec : (needs fast_checks)
+sec -> sec : CodeQL + SonarQube gate
+sec -> prom : (needs security_checks)
+prom -> prom : git push dev-001 HEAD → dev (GITHUB_TOKEN)
+prom -> prom : git push dev-001 HEAD → main (GITHUB_TOKEN)
+prom -> pg : (needs promote, parallel)
+prom -> wk : (needs promote, parallel)
+prom -> sb : (needs promote, parallel)
+pg -> pg : checkout main, build Vite app
 pg -> dev : deploy to GitHub Pages
-wk -> wk : sync docbase/
+wk -> wk : checkout main, sync docbase/
 wk -> dev : publish to GitHub Wiki
+sb -> sb : checkout main, informational scan
 @enduml
 ```

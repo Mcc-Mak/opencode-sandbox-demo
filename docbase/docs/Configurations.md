@@ -27,17 +27,8 @@ The script pushes each value into GitHub's secret store with `gh secret set`, en
 
 | Secret | Used by | Description |
 | --- | --- | --- |
-| `GIT_PUSH_TOKEN` | release | PAT for pushing release commits to `dev-001`. Scopes: `repo`, `workflow`. |
-| `PROMOTE_TOKEN` | promote, wiki | PAT that creates/merges promotion PRs (GITHUB_TOKEN PRs do not trigger checks) and pushes `docbase/` to the GitHub Wiki. Scopes: `repo`, `workflow`. |
-| `SONAR_TOKEN` | security gate | SonarQube Cloud analysis token. Optional — when absent, the dev→main gate runs CodeQL-only SAST; when present, Sonar runs and fails closed on its quality gate. |
-
-### Notification secrets
-
-| Secret | Used by | Description |
-| --- | --- | --- |
-| `NOTIFICATION_ADDRESS` | pages | Recipient email for deployment notifications. |
-| `NOTIFICATION_HEADER` | pages | Email subject header (e.g. `GitHub - [HKO] opencode-sandbox-demo`). |
-| `NOTIFICATION_ACTIVE` | pages | `"true"` to enable notifications, `"false"` to disable. Currently `false`. |
+| `PROMOTE_TOKEN` | wiki | PAT for pushing `docbase/` to the GitHub Wiki (separate `.wiki.git` repo). Scopes: `repo`. |
+| `SONAR_TOKEN` | security_checks, sonar_baseline | SonarQube Cloud analysis token. Optional — when absent, the security gate runs CodeQL-only SAST; when present, Sonar runs and fails closed on its quality gate. |
 
 ### Secrets configuration flow (Mermaid)
 
@@ -104,7 +95,7 @@ The multi-stage `codebase/Dockerfile` runs the same Vite build (`npm ci --ignore
 
 ## Documentation (GitHub Wiki)
 
-`docbase/` is markdown-only and is published to the repository's GitHub Wiki by the `wiki` job on push to `main`.
+`docbase/` is markdown-only and is published to the repository's GitHub Wiki by the `wiki` job after the `promote` job pushes to `main`.
 
 - The `wiki` job clones `{repo}.wiki.git`, copies `docbase/TOCTREE.md` and `docbase/docs/*.md` to the wiki root (GitHub Wiki serves pages by filename — subdirectories are not supported in URLs), generates a minimal `Home.md` and a `_Sidebar.md` (from `TOCTREE.md`), rewrites `docs/X.md` links to `X` for wiki resolution, and pushes with `--force-with-lease` (docbase is the source of truth).
 - It reuses `PROMOTE_TOKEN` (its `repo` scope covers the wiki repo).

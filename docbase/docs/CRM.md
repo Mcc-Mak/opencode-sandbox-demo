@@ -23,6 +23,7 @@ Maps requirements to the documents that specify, design, and verify them. Update
 | FR-017 | FR-017 | — | — | Stages | FR-017 | — |
 | FR-018 | FR-018 | — | — | Stages | FR-018 | — |
 | FR-019 | FR-019 | Components | OpenCode sandbox | — | FR-019 | Run the OpenCode sandbox |
+| FR-020 | FR-020 | CI/CD data flow | — | Stages | FR-020 | — |
 | NFR-001 | NFR-001 | Deployment | — | — | NFR-001 | — |
 | NFR-002 | NFR-002 | — | CI/CD secrets | Required secrets | NFR-002 | Prerequisites |
 | NFR-003 | NFR-003 | — | — | Required secrets | NFR-003 | Prerequisites |

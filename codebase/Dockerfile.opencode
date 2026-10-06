@@ -11,6 +11,9 @@ WORKDIR /sandbox
 # hadolint ignore=DL3018
 RUN apk add --no-cache git \
     && npm install -g opencode-ai@1.18.34 --ignore-scripts \
-    && node "$(npm root -g)/opencode-ai/postinstall.mjs"
+    && node "$(npm root -g)/opencode-ai/postinstall.mjs" \
+    && chown -R node:node /sandbox
+
+USER node
 
 ENTRYPOINT ["opencode"]
