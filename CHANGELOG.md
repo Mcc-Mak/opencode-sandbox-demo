@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Versions follow semver.
 
+## 0.6.6 (2026-10-06)
+
+### Other
+- docs: remove template boilerplate, keep 7 project-relevant docs (0.7.1)
+
 ## 0.6.5 (2026-10-06)
 
 ### Other
