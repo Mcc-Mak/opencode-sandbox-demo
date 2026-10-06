@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Versions follow semver.
 
+## 0.6.7 (2026-10-06)
+
+### Other
+- fix(docs): correct Mermaid edge label syntax in Architecture.md (0.7.2)
+
 ## 0.6.6 (2026-10-06)
 
 ### Other
