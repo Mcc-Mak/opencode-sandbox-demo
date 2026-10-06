@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Configure CI/CD secrets, notification settings, GitHub Pages, and the GitHub
-# Wiki from a local .env file.
+# Configure CI/CD secrets, GitHub Pages, and the GitHub Wiki from a local .env file.
 #
 # Usage:
 #   cp .env.example .env        # then fill in real token values
@@ -18,17 +17,17 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 env_file="$root/.env"
 
 if [[ ! -f "$env_file" ]]; then
-  echo "::error:: $env_file not found. Run: cp .env.example .env  then fill in real values."
+  echo "::error:: $env_file not found. Run: cp .env.example .env  then fill in real values." >&2
   exit 1
 fi
 
 if ! command -v gh >/dev/null 2>&1; then
-  echo "::error:: GitHub CLI (gh) is not installed. Install it from https://cli.github.com/"
+  echo "::error:: GitHub CLI (gh) is not installed. Install it from https://cli.github.com/" >&2
   exit 1
 fi
 
 if ! gh auth status >/dev/null 2>&1; then
-  echo "::error:: Not authenticated with gh. Run: gh auth login"
+  echo "::error:: Not authenticated with gh. Run: gh auth login" >&2
   exit 1
 fi
 
